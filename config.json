@@ -1,0 +1,4 @@
+{
+    "port": 3000,
+    "db_url": "postgresql://app:12345678@127.0.0.1:5432/mywebapp_db"
+}
