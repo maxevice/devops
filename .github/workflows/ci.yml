@@ -5,7 +5,7 @@ on:
     branches: [ "main", "master", "lab3" ]
     tags: [ 'v*.*.*' ]
   pull_request:
-    branches: [ "main", "master", lab1 ]
+    branches: [ "main", "master", "lab1" ]
 
 jobs:
   lint:
@@ -35,7 +35,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     
-    # 1. Піднімаємо тимчасову БД спеціально для тестів
     services:
       postgres:
         image: postgres:16
@@ -67,9 +66,10 @@ jobs:
       - name: Update config for CI
         run: sed -i 's/@db:5432/@localhost:5432/' config.json
           
-      # 3. Запускаємо тести
       - name: Run tests with pytest
-        run: pytest --cov=. --cov-report=xml --cov-fail-under=40 test_main.py
+        run: |
+          python migrate.py
+          pytest --cov=. --cov-report=xml --cov-fail-under=40 test_main.py
         
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -81,7 +81,7 @@ jobs:
   build-and-push:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
-    needs: test 
+    needs: test
     permissions:
       contents: read
       packages: write
