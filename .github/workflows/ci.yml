@@ -100,7 +100,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
-,
+
   deploy-and-verify:
     name: Deploy and Verify
     runs-on: self-hosted
