@@ -9,4 +9,4 @@ COPY . .
 
 EXPOSE 3000
 
-CMD python migrate.py && uvicorn main:app --host 0.0.0.0 --port 3000
+CMD ["/bin/sh", "-c", "python migrate.py && uvicorn main:app --host 0.0.0.0 --port 3000"]
