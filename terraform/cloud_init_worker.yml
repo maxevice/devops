@@ -1,0 +1,29 @@
+#cloud-config
+ssh_pwauth: true
+chpasswd:
+  expire: false
+
+users:
+  - name: ansible
+    groups: sudo
+    shell: /bin/bash
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    ssh_authorized_keys:
+      - ${ansible_ssh_key}
+  
+  - name: teacher
+    groups: sudo
+    shell: /bin/bash
+    lock_passwd: false
+    plain_text_passwd: '12345678'
+  
+  - name: app
+    shell: /bin/bash
+    system: true
+  
+  - name: operator
+    shell: /bin/bash
+    lock_passwd: false
+    plain_text_passwd: '12345678'
+    sudo:
+      - 'ALL=(ALL) NOPASSWD: /usr/bin/systemctl start mywebapp.service, /usr/bin/systemctl stop mywebapp.service, /usr/bin/systemctl restart mywebapp.service, /usr/bin/systemctl status mywebapp.service, /usr/bin/systemctl reload nginx'
