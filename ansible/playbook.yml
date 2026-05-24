@@ -1,0 +1,222 @@
+---
+- name: Common Setup
+  hosts: all
+  become: yes
+  vars:
+    student_n: "17" 
+
+  tasks:
+    - name: Створення користувача teacher
+      ansible.builtin.user:
+        name: teacher
+        password: "{{ '12345678' | password_hash('sha512') }}"
+        groups: sudo
+        append: yes
+        shell: /bin/bash
+
+    - name: Створення директорії для gradebook
+      ansible.builtin.file:
+        path: /home/student
+        state: directory
+        mode: '0755'
+
+    - name: Створення файлу gradebook
+      ansible.builtin.copy:
+        content: "{{ student_n }}\n"
+        dest: /home/student/gradebook
+        mode: '0644'
+
+- name: Setup Database Server
+  hosts: db
+  become: yes
+  vars:
+    worker_ip: "{{ hostvars[groups['workers'][0]]['ansible_host'] }}"
+
+  tasks:
+    - name: Встановлення PostgreSQL та залежностей
+      ansible.builtin.apt:
+        name: 
+          - postgresql
+          - postgresql-contrib
+          - python3-psycopg2
+          - acl # Потрібен для роботи become_user: postgres в Ansible
+        state: present
+        update_cache: yes
+
+    - name: Переконатися, що PostgreSQL запущено
+      ansible.builtin.systemd:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    - name: Створення бази даних mywebapp_db та призначення власника
+      community.postgresql.postgresql_db:
+        name: mywebapp_db
+        owner: app
+        state: present
+      become_user: postgres
+
+    - name: Створення користувача app із паролем
+      community.postgresql.postgresql_user:
+        name: app
+        password: '12345678'
+        state: present
+      become_user: postgres
+
+    - name: Налаштування прослуховування PostgreSQL на IP віртуалки
+      ansible.builtin.lineinfile:
+        path: /etc/postgresql/14/main/postgresql.conf
+        regexp: '^#?listen_addresses'
+        line: "listen_addresses = '{{ ansible_host }}'"
+      notify: Restart PostgreSQL
+
+    - name: Дозвіл підключення до БД тільки з Worker вузла
+      ansible.builtin.lineinfile:
+        path: /etc/postgresql/14/main/pg_hba.conf
+        line: "host    mywebapp_db     app             {{ worker_ip }}/32        scram-sha-256"
+      notify: Restart PostgreSQL
+
+  handlers:
+    - name: Restart PostgreSQL
+      ansible.builtin.systemd:
+        name: postgresql
+        state: restarted
+
+- name: Setup Worker Node
+  hosts: workers
+  become: yes
+  vars:
+    app_port: "3000"
+    db_ip: "{{ hostvars[groups['db'][0]]['ansible_host'] }}"
+
+  tasks:
+    - name: Встановлення Nginx та залежностей Python
+      ansible.builtin.apt:
+        name: 
+          - nginx
+          - python3-venv
+          - python3-pip
+          - acl
+        state: present
+        update_cache: yes
+
+    - name: Створення системного користувача app
+      ansible.builtin.user:
+        name: app
+        system: yes
+        shell: /usr/sbin/nologin
+        create_home: yes
+
+    - name: Створення користувача operator
+      ansible.builtin.user:
+        name: operator
+        password: "{{ '12345678' | password_hash('sha512') }}"
+        shell: /bin/bash
+
+    - name: Налаштування sudo прав для operator
+      ansible.builtin.copy:
+        content: |
+          operator ALL=(ALL) NOPASSWD: /bin/systemctl start mywebapp.service, /bin/systemctl stop mywebapp.service, /bin/systemctl restart mywebapp.service, /bin/systemctl status mywebapp.service, /bin/systemctl reload nginx
+        dest: /etc/sudoers.d/operator
+        mode: '0440'
+        validate: /usr/sbin/visudo -csf %s
+
+    - name: Створення директорії застосунку
+      ansible.builtin.file:
+        path: /home/app/mywebapp
+        state: directory
+        owner: app
+        group: app
+        mode: '0755'
+
+    - name: Копіювання файлів застосунку на сервер
+      ansible.builtin.copy:
+        src: ../       # <--- Змінили цей рядок (просто дві крапки і слеш)
+        dest: /home/app/mywebapp/
+        owner: app
+        group: app
+        mode: '0755'
+
+    - name: Розгортання config.json з шаблону
+      ansible.builtin.template:
+        src: templates/config.json.j2
+        dest: /home/app/mywebapp/config.json
+        owner: app
+        group: app
+        mode: '0644'
+
+    - name: Встановлення залежностей проєкту у venv
+      ansible.builtin.pip:
+        requirements: /home/app/mywebapp/requirements.txt
+        virtualenv: /home/app/mywebapp/venv
+        virtualenv_command: /usr/bin/python3 -m venv
+      become_user: app
+
+    - name: Розгортання конфігурації Nginx з шаблону
+      ansible.builtin.template:
+        src: templates/nginx.conf.j2
+        dest: /etc/nginx/sites-available/mywebapp
+      notify: Reload Nginx
+
+    - name: Активація сайту Nginx (симлінк)
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/mywebapp
+        dest: /etc/nginx/sites-enabled/mywebapp
+        state: link
+      notify: Reload Nginx
+
+    - name: Видалення дефолтного сайту Nginx
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Reload Nginx
+
+    - name: Розгортання systemd-unit застосунку з шаблону
+      ansible.builtin.template:
+        src: templates/mywebapp.service.j2
+        dest: /etc/systemd/system/mywebapp.service
+      notify: Restart Systemd
+
+    - name: Запуск та увімкнення сервісу застосунку
+      ansible.builtin.systemd:
+        name: mywebapp
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Reload Nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+
+    - name: Restart Systemd
+      ansible.builtin.systemd:
+        name: mywebapp
+        state: restarted
+        daemon_reload: yes
+
+- name: Verify application status
+  hosts: workers
+  become: yes
+  tasks:
+    - name: Check if Nginx service is running
+      ansible.builtin.service:
+        name: nginx
+        state: started
+
+    - name: Check if mywebapp service is active
+      ansible.builtin.service:
+        name: mywebapp
+        state: started
+
+    - name: Verify health check endpoints (alive)
+      ansible.builtin.uri:
+        url: http://localhost/health/alive
+        method: GET
+        status_code: 200
+
+    - name: Verify health check endpoints (ready)
+      ansible.builtin.uri:
+        url: http://localhost/health/ready
+        method: GET
+        status_code: 200

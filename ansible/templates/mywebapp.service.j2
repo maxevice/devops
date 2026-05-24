@@ -1,0 +1,16 @@
+[Unit]
+Description=My WebApp (ShareRide Backend)
+After=network.target
+
+[Service]
+User=app
+Group=app
+WorkingDirectory=/home/app/mywebapp
+Environment="PATH=/home/app/mywebapp/venv/bin"
+
+ExecStartPre=/home/app/mywebapp/venv/bin/python migrate.py
+ExecStart=/home/app/mywebapp/venv/bin/uvicorn main:app --host 127.0.0.1 --port {{ app_port }}
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
