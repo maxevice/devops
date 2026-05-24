@@ -22,7 +22,8 @@ jobs:
           ssh -o StrictHostKeyChecking=no student@192.168.56.102 "sudo mv /tmp/mywebapp.service /etc/systemd/system/ && sudo systemctl daemon-reload"
           
           echo "3. Завантаження актуального Docker-образу..."
-          ssh -o StrictHostKeyChecking=no student@192.168.56.102 "sudo docker pull ghcr.io/${{ github.repository }}:stable"
+          ssh -o StrictHostKeyChecking=no student@192.168.56.102 "sudo docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}"
+          ssh -o StrictHostKeyChecking=no student@192.168.56.102 "sudo docker tag ghcr.io/${{ github.repository }}:${{ github.ref_name }} ghcr.io/${{ github.repository }}:stable"
           
           echo "4. Перезапуск застосунку..."
           ssh -o StrictHostKeyChecking=no student@192.168.56.102 "sudo systemctl restart mywebapp"
