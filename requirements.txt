@@ -3,3 +3,7 @@ uvicorn
 sqlalchemy
 psycopg2-binary
 python-multipart
+pytest
+pytest-cov
+httpx
+flake8
