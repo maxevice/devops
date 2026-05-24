@@ -135,8 +135,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no student@192.168.56.102 "sudo docker exec mywebapp python migrate.py"
           
           echo "Запуск процесу верифікації зсередини сервера..."
-          # Виконуємо curl безпосередньо на самій цільовій машині через SSH на локальний порт
-          HTTP_STATUS=$(ssh -o StrictHostKeyChecking=no student@192.168.56.102 "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/items")
+          HTTP_STATUS=$(ssh -o StrictHostKeyChecking=no student@192.168.56.102 "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/items")
           
           if [ "$HTTP_STATUS" -eq 200 ]; then
             echo "✅ ВЕРИФІКАЦІЯ УСПІШНА! Nginx працює, сервіс доступний. Код: $HTTP_STATUS"
