@@ -134,12 +134,14 @@ jobs:
           echo "Створення таблиць у базі даних (Міграція)..."
           ssh -o StrictHostKeyChecking=no student@192.168.56.102 "sudo docker exec mywebapp python migrate.py"
           
-          echo "Запуск процесу верифікації зсередини сервера..."
-          HTTP_STATUS=$(ssh -o StrictHostKeyChecking=no student@192.168.56.102 "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/items")
+          echo "Перевірка доступності через Nginx..."
+          HTTP_STATUS=$(ssh -o StrictHostKeyChecking=no student@192.168.56.102 "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/items")
           
-          if [ "$HTTP_STATUS" -eq 200 ]; then
-            echo "✅ ВЕРИФІКАЦІЯ УСПІШНА! Nginx працює, сервіс доступний. Код: $HTTP_STATUS"
+          NGINX_HEADER=$(ssh -o StrictHostKeyChecking=no student@192.168.56.102 "curl -s -I http://127.0.0.1/items | grep -i '^server: nginx'")
+          
+          if [ "$HTTP_STATUS" -eq 200 ] && [ ! -z "$NGINX_HEADER" ]; then
+            echo "✅ ВЕРИФІКАЦІЯ УСПІШНА! Nginx працює і проксіює запити. Код: $HTTP_STATUS"
           else
-            echo "❌ ПОМИЛКА ВЕРИФІКАЦІЇ! Сервіс недоступний. Код: $HTTP_STATUS"
+            echo "❌ ПОМИЛКА ВЕРИФІКАЦІЇ! Сервіс недоступний або Nginx не налаштований. Код: $HTTP_STATUS"
             exit 1
           fi
