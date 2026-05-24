@@ -1,0 +1,44 @@
+name: CD Pipeline
+
+on:
+  push:
+    tags: [ 'v*.*.*' ]
+
+jobs:
+  deploy-and-verify:
+    name: Deploy and Verify
+    runs-on: self-hosted 
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Target Node
+        run: |
+          echo "1. Копіювання systemd-unit на цільову машину..."
+          scp -o StrictHostKeyChecking=no mywebapp.service student@192.168.56.102:/tmp/
+          
+          echo "2. Переміщення unit-файлу та перезавантаження systemd..."
+          ssh -o StrictHostKeyChecking=no student@192.168.56.102 "sudo mv /tmp/mywebapp.service /etc/systemd/system/ && sudo systemctl daemon-reload"
+          
+          echo "3. Завантаження актуального Docker-образу..."
+          ssh -o StrictHostKeyChecking=no student@192.168.56.102 "sudo docker pull ghcr.io/${{ github.repository }}:stable"
+          
+          echo "4. Перезапуск застосунку..."
+          ssh -o StrictHostKeyChecking=no student@192.168.56.102 "sudo systemctl restart mywebapp"
+
+      - name: Verify Deployment
+        run: |
+          echo "Чекаємо 5 секунд для ініціалізації контейнера..."
+          sleep 5
+          
+          echo "Запуск процесу верифікації..."
+          # Робимо запит до Nginx на Target Node
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://192.168.56.102/health/alive)
+          
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "✅ ВЕРИФІКАЦІЯ УСПІШНА! Nginx працює, сервіс доступний. Код: $HTTP_STATUS"
+          else
+            echo "❌ ПОМИЛКА ВЕРИФІКАЦІЇ! Сервіс недоступний. Код: $HTTP_STATUS"
+            exit 1
+          fi
