@@ -100,7 +100,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
-
+,
   deploy-and-verify:
     name: Deploy and Verify
     runs-on: self-hosted
@@ -128,11 +128,11 @@ jobs:
 
       - name: Verify Deployment
         run: |
-          echo "Чекаємо 5 секунд для ініціалізації контейнера..."
-          sleep 5
+          echo "Чекаємо 10 секунд для ініціалізації контейнера..."
+          sleep 10
           
           echo "Запуск процесу верифікації..."
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://192.168.56.102/health/alive)
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://192.168.56.102:8000/items)
           
           if [ "$HTTP_STATUS" -eq 200 ]; then
             echo "✅ ВЕРИФІКАЦІЯ УСПІШНА! Nginx працює, сервіс доступний. Код: $HTTP_STATUS"
